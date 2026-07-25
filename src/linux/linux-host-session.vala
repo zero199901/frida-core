@@ -90,8 +90,10 @@ namespace Frida {
 
 		public override async void preload (Cancellable? cancellable) throws Error, IOError {
 #if ANDROID
-			yield get_android_helper_client (cancellable);
-			yield robo_launcher.preload (cancellable);
+			if (!android_system_agents_disabled ()) {
+				yield get_android_helper_client (cancellable);
+				yield robo_launcher.preload (cancellable);
+			}
 #endif
 		}
 
@@ -194,6 +196,9 @@ namespace Frida {
 				Cancellable? cancellable) throws Error, IOError {
 			var opts = FrontmostQueryOptions._deserialize (options);
 #if ANDROID
+			if (android_system_agents_disabled ())
+				return HostApplicationInfo.empty ();
+
 			var client = yield get_android_helper_client (cancellable);
 
 			var app = yield client.get_frontmost_application (opts, cancellable);
@@ -222,6 +227,9 @@ namespace Frida {
 				Cancellable? cancellable) throws Error, IOError {
 			var opts = ApplicationQueryOptions._deserialize (options);
 #if ANDROID
+			if (android_system_agents_disabled ())
+				return new HostApplicationInfo[0];
+
 			var client = yield get_android_helper_client (cancellable);
 
 			var apps = yield client.enumerate_applications (opts, cancellable);
@@ -260,6 +268,10 @@ namespace Frida {
 		}
 
 #if ANDROID
+		private static bool android_system_agents_disabled () {
+			return Environment.get_variable ("FRIDA_DISABLE_ANDROID_SYSTEM_AGENTS") == "1";
+		}
+
 		private void add_app_process_state (HostApplicationInfo app, HashTable<string, Variant> process_params) {
 			var app_params = app.parameters;
 			app_params["user"] = process_params["user"];
@@ -272,6 +284,9 @@ namespace Frida {
 				Cancellable? cancellable) throws Error, IOError {
 			var opts = ProcessQueryOptions._deserialize (options);
 #if ANDROID
+			if (android_system_agents_disabled ())
+				return yield process_enumerator.enumerate_processes (opts);
+
 			var client = yield get_android_helper_client (cancellable);
 			return yield client.enumerate_processes (opts, cancellable);
 #else
@@ -294,7 +309,8 @@ namespace Frida {
 					gater.start ();
 			}
 
-			yield robo_launcher.enable_spawn_gating (cancellable);
+			if (!android_system_agents_disabled ())
+				yield robo_launcher.enable_spawn_gating (cancellable);
 #else
 			// No portable way to tell a GUI app from any other execve here, so both scopes map to
 			// the same system-wide gater.
@@ -393,10 +409,12 @@ namespace Frida {
 
 		public override async void kill (uint pid, Cancellable? cancellable) throws Error, IOError {
 #if ANDROID
-			var client = yield get_android_helper_client (cancellable);
+			if (!android_system_agents_disabled ()) {
+				var client = yield get_android_helper_client (cancellable);
 
-			if (yield client.try_stop_package_by_pid (pid, cancellable))
-				return;
+				if (yield client.try_stop_package_by_pid (pid, cancellable))
+					return;
+			}
 #endif
 
 			yield helper.kill (pid, cancellable);
@@ -1390,6 +1408,7 @@ namespace Frida {
 		private bool spawn_gating_enabled = false;
 		private Gee.HashMap<string, Promise<uint>> spawn_requests = new Gee.HashMap<string, Promise<uint>> ();
 		private Gee.HashMap<uint, HostSpawnInfo?> pending_spawn = new Gee.HashMap<uint, HostSpawnInfo?> ();
+		private Gee.HashSet<uint> manually_suspended_spawns = new Gee.HashSet<uint> ();
 		private SpawnGatingWatchdog watchdog = new SpawnGatingWatchdog ();
 
 		private delegate void CompletionNotify (GLib.Error? error);
@@ -1429,6 +1448,10 @@ namespace Frida {
 			foreach (var request in spawn_requests.values.to_array ())
 				request.reject (new Error.INVALID_OPERATION ("Cancelled by shutdown"));
 			spawn_requests.clear ();
+
+			foreach (var pid in manually_suspended_spawns.to_array ())
+				Posix.kill ((Posix.pid_t) pid, Posix.Signal.CONT);
+			manually_suspended_spawns.clear ();
 
 			foreach (var e in zymbiote_patches.entries) {
 				uint pid = e.key;
@@ -1496,6 +1519,9 @@ namespace Frida {
 
 			var entrypoint = PackageEntrypoint.parse (package, options);
 
+			if (android_system_agents_disabled ())
+				return spawn_package_without_system_agents (package, entrypoint);
+
 			yield ensure_loaded (cancellable);
 
 			var helper = yield host_session.get_android_helper_client (cancellable);
@@ -1537,7 +1563,51 @@ namespace Frida {
 			return pid;
 		}
 
+		private uint spawn_package_without_system_agents (string package, PackageEntrypoint entrypoint) throws Error {
+			string script;
+			string[] argv;
+
+			if (entrypoint is DefaultActivityEntrypoint) {
+				script = "am force-stop --user \"$2\" \"$1\"; monkey -p \"$1\" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; i=0; while [ $i -lt 100 ]; do p=$(pidof \"$1\"); if [ -n \"$p\" ]; then kill -STOP $p; echo $p; exit 0; fi; i=$((i + 1)); sleep 0.05; done; exit 1";
+				argv = new string[] { "sh", "-c", script, "frida-native-launcher", package, entrypoint.uid.to_string () };
+			} else if (entrypoint is ActivityEntrypoint) {
+				var activity = ((ActivityEntrypoint) entrypoint).activity;
+				script = "am force-stop --user \"$3\" \"$1\"; am start --user \"$3\" -n \"$1/$2\" >/dev/null 2>&1; i=0; while [ $i -lt 100 ]; do p=$(pidof \"$1\"); if [ -n \"$p\" ]; then kill -STOP $p; echo $p; exit 0; fi; i=$((i + 1)); sleep 0.05; done; exit 1";
+				argv = new string[] { "sh", "-c", script, "frida-native-launcher", package, activity, entrypoint.uid.to_string () };
+			} else {
+				throw new Error.NOT_SUPPORTED ("Broadcast receiver spawning requires Android system agents");
+			}
+
+			try {
+				string process_output;
+				string process_error;
+				int exit_status;
+				GLib.Process.spawn_sync (null, argv, null, GLib.SpawnFlags.SEARCH_PATH, null, out process_output,
+					out process_error, out exit_status);
+				if (exit_status != 0)
+					throw new Error.NOT_SUPPORTED ("Unable to start Android package without system agents: %s",
+						process_error.strip ());
+
+				uint pid = uint.parse (process_output.strip ());
+				if (pid == 0)
+					throw new Error.NOT_SUPPORTED ("Unable to determine Android package PID without system agents");
+				manually_suspended_spawns.add (pid);
+				return pid;
+			} catch (GLib.SpawnError e) {
+				throw new Error.NOT_SUPPORTED ("Unable to start Android package without system agents: %s", e.message);
+			}
+		}
+
+		private static bool android_system_agents_disabled () {
+			return Environment.get_variable ("FRIDA_DISABLE_ANDROID_SYSTEM_AGENTS") == "1";
+		}
+
 		public bool try_resume (uint pid) {
+			if (manually_suspended_spawns.remove (pid)) {
+				Posix.kill ((Posix.pid_t) pid, Posix.Signal.CONT);
+				return true;
+			}
+
 			ZymbioteConnection? connection;
 			if (!zymbiote_connections.unset (pid, out connection))
 				return false;
