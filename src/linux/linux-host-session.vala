@@ -400,8 +400,15 @@ namespace Frida {
 				return;
 
 #if ANDROID
-			if (robo_launcher.try_resume (pid))
+			if (robo_launcher.try_resume (pid)) {
+				try {
+					yield helper.resume (pid, cancellable);
+				} catch (Error e) {
+					if (!(e is Error.INVALID_ARGUMENT))
+						throw e;
+				}
 				return;
+			}
 #endif
 
 			yield helper.resume (pid, cancellable);
