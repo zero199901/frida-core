@@ -30,13 +30,18 @@ neutral_thread_name (const gchar * name)
   if (name == NULL)
     return NULL;
 
-  /* Same lengths as the originals, so nothing here depends on the comm limit. */
+  /*
+   * None of the replacements may itself contain a token from the detector's
+   * list (frida, gum-js-loop, gmain, gdbus, lldb, ...): "cache-gmain" and
+   * "cache-gdbus" would have been no better than what they replace. Each of
+   * these fits the 15 bytes Linux gives a comm value, with room for the NUL.
+   */
   if (strcmp (name, "gum-js-loop") == 0)
     return "cache-js-loop";
   if (strcmp (name, "gmain") == 0)
-    return "cache-gmain";
+    return "cache-glib-loop";
   if (strcmp (name, "gdbus") == 0)
-    return "cache-gdbus";
+    return "cache-bus-loop";
 
   return name;
 }
