@@ -49,7 +49,7 @@ frida_init_with_runtime (FridaRuntime rt)
     /*
      * gum_init() sets the program name to "frida", which GLib bakes into
      * its worker thread names ("pool-<prgname>"), leaking the tool identity
-     * into /proc/self/task/*/comm. Override it before any pool is created.
+     * into the per-thread comm files. Override it before any pool is made.
      */
     g_set_prgname ("cache");
 #ifndef HAVE_EMBEDDED_ASSETS
