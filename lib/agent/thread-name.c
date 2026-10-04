@@ -14,8 +14,10 @@
  * The target's own threads are untouched: its code lives in its own binaries
  * and is not part of this link unit.
  *
- * Note for future edits: a glob like /proc/self/task/*/comm inside a C block
- * comment terminates it. Write <tid> here.
+ * Note for future edits: do not put a path glob in this comment. The two
+ * characters that close a C block comment appear in every /proc glob, so
+ * writing one here silently turns the rest of the note into code. Name a
+ * concrete path instead, as above.
  */
 
 GThread *__real_g_thread_new (const gchar * name, GThreadFunc func, gpointer data);
