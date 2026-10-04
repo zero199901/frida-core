@@ -15,6 +15,10 @@ namespace Frida {
 	}
 
 	public sealed class ResourceCompiler {
+		// Frida's glib bundle only brings up the type system here; system glib
+		// self-initialises, so callers guard this with HAVE_FRIDA_GLIB.
+		[CCode (cname = "gobject_init")]
+		public static extern void gobject_init ();
 		private static Toolchain toolchain;
 		private static Machine machine;
 		private static string toolchain_name;
@@ -34,6 +38,11 @@ namespace Frida {
 		};
 
 		public static int main (string[] args) {
+#if HAVE_FRIDA_GLIB
+			// Without this the first GLib.GFile call lands in g_type_from_name()
+			// with a NULL type_name_hash, and the tool dies with SIGSEGV.
+			gobject_init ();
+#endif
 #if WINDOWS
 			toolchain = Toolchain.MICROSOFT;
 #elif DARWIN
