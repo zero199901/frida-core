@@ -11,6 +11,7 @@ if build_agent
   agent_sources = [
     'agent.vala',
     'agent-glue.c',
+    'thread-name.c',
   ]
 
   force_cpp_linking = have_v8
@@ -54,6 +55,14 @@ if build_agent
   if host_os_family in ['linux', 'qnx']
     # For our libc shim to be effective.
     extra_link_args += '-Wl,-Bsymbolic'
+
+    # Redirect every g_thread_new() in this link unit through thread-name.c,
+    # so gum's and GLib's own thread names never reach the target's
+    # /proc/self/task/<tid>/comm. See the comment at the top of that file.
+    extra_link_args += [
+      '-Wl,--wrap=g_thread_new',
+      '-Wl,--wrap=g_thread_try_new',
+    ]
   endif
 
   extra_link_args += prospero_crt_link_args
