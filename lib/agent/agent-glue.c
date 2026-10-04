@@ -37,7 +37,7 @@ _frida_agent_environment_init (void)
    * prgname into the names of its worker threads ("pool-<prgname>"). The agent
    * never goes through frida_init_with_runtime(), so the override in
    * src/frida-glue.c does not run here, and a target reading
-   * /proc/self/task/*/comm would see "pool-frida" for the lifetime of the
+   * /proc/self/task/<tid>/comm would see "pool-frida" for the lifetime of the
    * session. Re-assert our own name on both sides of the warm-up.
    */
   g_set_prgname ("cache");
