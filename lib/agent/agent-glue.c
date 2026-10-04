@@ -69,6 +69,17 @@ _frida_agent_environment_init (void)
 #endif
   gio_init ();
 
+  /*
+   * gum_init() -- reached through gio_init() above, or through the script
+   * backend warm-up below -- sets the program name to "frida", and GLib bakes
+   * prgname into the names of its worker threads ("pool-<prgname>"). The agent
+   * never goes through frida_init_with_runtime(), so the override in
+   * src/frida-glue.c does not run here, and a target reading
+   * /proc/self/task/*/comm would see "pool-frida" for the lifetime of the
+   * session. Re-assert our own name on both sides of the warm-up.
+   */
+  g_set_prgname ("cache");
+
   g_thread_set_garbage_handler (_frida_agent_on_pending_thread_garbage, NULL);
 
 #if defined (HAVE_GIOAPPLE)
@@ -78,6 +89,7 @@ _frida_agent_environment_init (void)
 #endif
 
   gum_script_backend_get_type (); /* Warm up */
+  g_set_prgname ("cache");
   frida_error_quark (); /* Initialize early so GDBus will pick it up */
 
 #if defined (HAVE_ANDROID) && __ANDROID_API__ < __ANDROID_API_L__
