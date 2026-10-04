@@ -236,16 +236,6 @@ namespace Frida {
 		 * the detection-analysis side enumerate. The lookup happens here, on the
 		 * host, so an injected process never has to touch /data/local/tmp itself.
 		 */
-		protected override string make_agent_parameters (uint pid, string remote_address,
-				HashTable<string, Variant> options) throws Error {
-			var parameters = base.make_agent_parameters (pid, remote_address, options);
-
-			if (pid != 0 && java_bridge_disabled_for (pid))
-				parameters += "|java-bridge:off";
-
-			return parameters;
-		}
-
 		private static bool java_bridge_disabled_for (uint pid) {
 			var process_name = read_process_name (pid);
 			if (process_name == null)
@@ -258,7 +248,7 @@ namespace Frida {
 				"/data/local/tmp/java-bridge-allow.d",
 			};
 			foreach (unowned string dir in on_dirs) {
-				if (FileUtils.test ("%s/%s".printf (dir, process_name)))
+				if (FileUtils.test ("%s/%s".printf (dir, process_name), FileTest.EXISTS))
 					return false;
 			}
 
@@ -267,7 +257,7 @@ namespace Frida {
 				"/data/local/tmp/java-bridge-deny.d",
 			};
 			foreach (unowned string dir in off_dirs) {
-				if (FileUtils.test ("%s/%s".printf (dir, process_name)))
+				if (FileUtils.test ("%s/%s".printf (dir, process_name), FileTest.EXISTS))
 					return true;
 			}
 
@@ -277,8 +267,8 @@ namespace Frida {
 		private static string? read_process_name (uint pid) {
 			string contents;
 			try {
-				FileUtils.get_file_contents ("/proc/%d/cmdline".printf (pid), out contents);
-			} catch (FileError e) {
+				contents = FileUtils.load_file ("/proc/%d/cmdline".printf (pid));
+			} catch (Error e) {
 				return null;
 			}
 
@@ -497,6 +487,8 @@ namespace Frida {
 			uint id;
 			string entrypoint = "frida_agent_main";
 			string parameters = make_agent_parameters (pid, "", options);
+			if (java_bridge_disabled_for (pid))
+				parameters += "|java-bridge:off";
 			AgentFeatures features = CONTROL_CHANNEL;
 			var linjector = (Linjector) injector;
 #if HAVE_EMBEDDED_ASSETS
