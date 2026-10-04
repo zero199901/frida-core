@@ -45,6 +45,13 @@ frida_init_with_runtime (FridaRuntime rt)
     gio_init ();
 #endif
     gum_init ();
+
+    /*
+     * gum_init() sets the program name to "frida", which GLib bakes into
+     * its worker thread names ("pool-<prgname>"), leaking the tool identity
+     * into /proc/self/task/*/comm. Override it before any pool is created.
+     */
+    g_set_prgname ("cache");
 #ifndef HAVE_EMBEDDED_ASSETS
     _frida_init_asset_paths ();
 #endif
@@ -60,7 +67,7 @@ frida_init_with_runtime (FridaRuntime rt)
     {
       main_context = g_main_context_ref (g_main_context_default ());
       main_loop = g_main_loop_new (main_context, FALSE);
-      main_thread = g_thread_new ("frida-main-loop", run_main_loop, NULL);
+      main_thread = g_thread_new ("cache-main-loop", run_main_loop, NULL);
     }
 
     g_once_init_leave (&frida_initialized, TRUE);
