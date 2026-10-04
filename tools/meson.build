@@ -10,12 +10,15 @@ elif build_os_family != 'windows'
   extra_link_depends += [symscript]
 endif
 
+frida_glib_for_tools = native_glib_dep.type_name() == 'internal' or \
+    meson.get_compiler('c', native: true).has_function('g_thread_set_callbacks', dependencies: [native_glib_dep])
+
 resource_compiler = executable('frida-resource-compiler', 'resource-compiler.vala',
   vala_args: [
     '--pkg=gio-2.0',
     '--pkg=libbrotlienc',
     '--enable-deprecated',
-  ],
+  ] + (frida_glib_for_tools ? ['--define=HAVE_FRIDA_GLIB'] : []),
   link_args: extra_link_args,
   link_depends: extra_link_depends,
   dependencies: [native_glib_dep, native_gio_dep, native_gee_dep, native_brotlienc_dep],
