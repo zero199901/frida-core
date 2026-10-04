@@ -214,7 +214,7 @@ namespace Frida.Agent {
 					"delete globalThis.Java; delete globalThis.java;");
 				script.load_sync ();
 				script.unload_sync ();
-			} catch (Error e) {
+			} catch (GLib.Error e) {
 				GLib.warning ("Unable to hide the Java bridge: %s", e.message);
 			}
 		}
