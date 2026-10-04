@@ -223,6 +223,71 @@ namespace Frida {
 #endif
 		}
 
+		/*
+		 * Per-package control files under /data/local/tmp decide whether the
+		 * agent brings its Java bridge into a target:
+		 *
+		 *   /data/local/tmp/{.,}java-bridge-force.d/<package>   bridge on
+		 *   /data/local/tmp/{.,}java-bridge-allow.d/<package>   bridge on
+		 *   /data/local/tmp/{.,}java-bridge-deny.d/<package>    bridge off
+		 *
+		 * force and allow beat deny, and both the dotted and plain directory
+		 * names are honoured, which is what the profile regression scripts on
+		 * the detection-analysis side enumerate. The lookup happens here, on the
+		 * host, so an injected process never has to touch /data/local/tmp itself.
+		 */
+		protected override string make_agent_parameters (uint pid, string remote_address,
+				HashTable<string, Variant> options) throws Error {
+			var parameters = base.make_agent_parameters (pid, remote_address, options);
+
+			if (pid != 0 && java_bridge_disabled_for (pid))
+				parameters += "|java-bridge:off";
+
+			return parameters;
+		}
+
+		private static bool java_bridge_disabled_for (uint pid) {
+			var process_name = read_process_name (pid);
+			if (process_name == null)
+				return false;
+
+			string[] on_dirs = {
+				"/data/local/tmp/.java-bridge-force.d",
+				"/data/local/tmp/java-bridge-force.d",
+				"/data/local/tmp/.java-bridge-allow.d",
+				"/data/local/tmp/java-bridge-allow.d",
+			};
+			foreach (unowned string dir in on_dirs) {
+				if (FileUtils.test ("%s/%s".printf (dir, process_name)))
+					return false;
+			}
+
+			string[] off_dirs = {
+				"/data/local/tmp/.java-bridge-deny.d",
+				"/data/local/tmp/java-bridge-deny.d",
+			};
+			foreach (unowned string dir in off_dirs) {
+				if (FileUtils.test ("%s/%s".printf (dir, process_name)))
+					return true;
+			}
+
+			return false;
+		}
+
+		private static string? read_process_name (uint pid) {
+			string contents;
+			try {
+				FileUtils.get_file_contents ("/proc/%d/cmdline".printf (pid), out contents);
+			} catch (FileError e) {
+				return null;
+			}
+
+			var end = contents.index_of_char ('\0');
+			var name = (end != -1) ? contents.substring (0, end) : contents;
+			name = name.strip ();
+			return (name.length != 0) ? name : null;
+		}
+
 		public override async HostApplicationInfo[] enumerate_applications (HashTable<string, Variant> options,
 				Cancellable? cancellable) throws Error, IOError {
 			var opts = ApplicationQueryOptions._deserialize (options);
