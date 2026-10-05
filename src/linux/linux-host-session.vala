@@ -236,8 +236,8 @@ namespace Frida {
 		 * the detection-analysis side enumerate. The lookup happens here, on the
 		 * host, so an injected process never has to touch /data/local/tmp itself.
 		 */
-		private static bool java_bridge_disabled_for (uint pid) {
-			var process_name = read_process_name (pid);
+		private async bool java_bridge_disabled_for (uint pid) throws Error {
+			var process_name = yield resolve_process_name (pid);
 			if (process_name == null)
 				return false;
 
@@ -264,18 +264,17 @@ namespace Frida {
 			return false;
 		}
 
-		private static string? read_process_name (uint pid) {
-			string contents;
-			try {
-				FileUtils.get_contents ("/proc/%u/cmdline".printf (pid), out contents);
-			} catch (FileError e) {
-				return null;
-			}
-
-			var end = contents.index_of_char ('\0');
-			var name = (end != -1) ? contents.substring (0, end) : contents;
-			name = name.strip ();
-			return (name.length != 0) ? name : null;
+		/*
+		 * Not FileUtils.get_contents on /proc/<pid>/cmdline: procfs reports size
+		 * 0, so the read comes back empty and every lookup misses. The session
+		 * already has a process enumerator that reports the same name.
+		 */
+		private async string? resolve_process_name (uint pid) throws Error {
+			var opts = new ProcessQueryOptions ();
+			opts.select_pid (pid);
+			opts.scope = MINIMAL;
+			var processes = yield process_enumerator.enumerate_processes (opts);
+			return (processes.length != 0) ? processes[0].identifier : null;
 		}
 
 		public override async HostApplicationInfo[] enumerate_applications (HashTable<string, Variant> options,
@@ -487,7 +486,7 @@ namespace Frida {
 			uint id;
 			string entrypoint = "frida_agent_main";
 			string parameters = make_agent_parameters (pid, "", options);
-			if (java_bridge_disabled_for (pid))
+			if (yield java_bridge_disabled_for (pid))
 				parameters += "|java-bridge:off";
 			AgentFeatures features = CONTROL_CHANNEL;
 			var linjector = (Linjector) injector;
