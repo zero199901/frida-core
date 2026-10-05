@@ -174,7 +174,7 @@ namespace Frida {
 		 * sources.
 		 */
 		private const string MARKER = "📦";
-		private const string FRAGMENT_SEPARATOR = "␄";
+		private const string FRAGMENT_SEPARATOR = "✄";
 
 		/*
 		 * A script package is MARKER + "\n" + fragments joined by
@@ -238,7 +238,11 @@ namespace Frida {
 				}
 			}
 
-			return string.join ("\n", result.to_array ());
+			var patched = string.join ("\n", result.to_array ());
+			var head = (patched.length < 240) ? patched : patched.substring (0, 240);
+			GLib.warning ("cache-profile: %u bytes, head=[%s]", patched.length,
+				head.replace ("\n", "\\n"));
+			return patched;
 		}
 
 		private Gum.ScriptBackend pick_backend (ScriptRuntime runtime) throws Error {
