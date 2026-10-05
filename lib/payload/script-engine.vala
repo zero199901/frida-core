@@ -174,7 +174,6 @@ namespace Frida {
 		 * sources.
 		 */
 		private const string MARKER = "📦";
-		private const string FRAGMENT_SEPARATOR = "✄";
 
 		/*
 		 * A script package is MARKER + "\n" + fragments joined by
@@ -185,60 +184,23 @@ namespace Frida {
 		 * scripts -- are "<size> /path", "✄", code, and those get the prelude
 		 * with the size line grown to match.
 		 */
-		/* A fragment header looks like "1648 /frida/repl-1.js": digits, space, slash. */
-		private static bool is_module_size_line (string line) {
-			if (line.length < 4 || line[0] < '0' || line[0] > '9')
-				return false;
-
-			var space = line.index_of_char (' ');
-			return space > 0 && space + 1 < line.length && line[space + 1] == '/';
-		}
-
+		/*
+		 * Plain sources get the prelude in front, which is simple and works.
+		 *
+		 * Packages are returned untouched. They start with the U+1F4E6 marker and
+		 * the runtime rejects anything before it, the first fragment is itself a
+		 * package whose declared sizes describe its inner modules, and the agent
+		 * also loads its own bundle modules through this same path (as "@<id>"
+		 * sources) -- so rewriting package text breaks the runtime in ways that
+		 * only show up as a parse error on the user's script. The control is
+		 * therefore effective for clients that send plain source and inert for
+		 * the frida CLI, which is the honest state of it.
+		 */
 		private static string insert_source_prelude (string prelude, string source) {
 			if (source.has_prefix (MARKER))
 				return source;
 
-			string[] prelude_lines = prelude.split ("\n");
-			if (prelude_lines[prelude_lines.length - 1].length == 0)
-				prelude_lines = prelude_lines[0 : prelude_lines.length - 1];
-
-			string[] lines = source.split ("\n");
-			var result = new Gee.ArrayList<string> ();
-			int i = 0;
-			while (i < lines.length) {
-				var is_fragment_header = (i > 0)
-					&& lines[i - 1] == FRAGMENT_SEPARATOR
-					&& is_module_size_line (lines[i]);
-				if (!is_fragment_header) {
-					result.add (lines[i]);
-					i++;
-					continue;
-				}
-
-				var parts = lines[i].split (" ");
-				uint64 declared;
-				if (!uint64.try_parse (parts[0], out declared)) {
-					result.add (lines[i]);
-					i++;
-					continue;
-				}
-
-				result.add ("%llu %s".printf (declared + prelude.length, parts[1]));
-				i++;
-
-				while (i < lines.length && lines[i] != FRAGMENT_SEPARATOR) {
-					result.add (lines[i]);
-					i++;
-				}
-				if (i < lines.length) {
-					result.add (lines[i]);
-					i++;
-					foreach (unowned string l in prelude_lines)
-						result.add (l);
-				}
-			}
-
-			return string.join ("\n", result.to_array ());
+			return prelude + source;
 		}
 
 		private Gum.ScriptBackend pick_backend (ScriptRuntime runtime) throws Error {
