@@ -102,17 +102,8 @@ namespace Frida {
 
 			string? script_source = source;
 			var prelude = source_prelude;
-			if (prelude != null && script_source != null) {
-				script_source = prelude + script_source;
-
-				// Temporary: the runtime rejected the assembled script with a
-				// parse error on the line after the prelude, and guessing what
-				// sits at the boundary is slower than looking.
-				var head = (script_source.length < 48)
-					? script_source : script_source.substring (0, 48);
-				GLib.warning ("cache-profile: assembled %u bytes, head=[%s]",
-					script_source.length, head.replace ("\n", "\\n"));
-			}
+			if (prelude != null && script_source != null)
+				script_source = insert_source_prelude (prelude, script_source);
 
 			Gum.ScriptBackend backend = pick_backend (options.runtime);
 
@@ -172,6 +163,35 @@ namespace Frida {
 			} catch (Gum.Error e) {
 				throw new Error.INVALID_ARGUMENT ("%s", e.message);
 			}
+		}
+
+		/*
+		 * A script that starts with U+1F4E6 is a script package: the marker and
+		 * the size/path lines that follow have to stay at the very top, or the
+		 * runtime rejects the whole thing with "unexpected character" pointing at
+		 * the marker line (and "Malformed package" from the loader). So the
+		 * prelude goes after the header block, and only at the top for ordinary
+		 * sources.
+		 */
+		private static string insert_source_prelude (string prelude, string source) {
+			if (!source.has_prefix ("\U0001F4E6"))
+				return prelude + source;
+
+			var builder = new StringBuilder ();
+			string[] lines = source.split ("\n");
+			for (int i = 0; i < lines.length; i++) {
+				if (i > 0)
+					builder.append_c ('\n');
+				builder.append (lines[i]);
+
+				// The header ends at the first blank line.
+				if (i > 0 && lines[i].length == 0) {
+					builder.append_c ('\n');
+					builder.append (prelude);
+				}
+			}
+
+			return builder.str;
 		}
 
 		private Gum.ScriptBackend pick_backend (ScriptRuntime runtime) throws Error {
