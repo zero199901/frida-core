@@ -195,8 +195,8 @@ namespace Frida {
 		}
 
 		private static string insert_source_prelude (string prelude, string source) {
-			if (!source.has_prefix (MARKER))
-				return prelude + source;
+			if (source.has_prefix (MARKER))
+				return source;
 
 			string[] prelude_lines = prelude.split ("\n");
 			if (prelude_lines[prelude_lines.length - 1].length == 0)
@@ -238,11 +238,7 @@ namespace Frida {
 				}
 			}
 
-			var patched = string.join ("\n", result.to_array ());
-			var head = (patched.length < 240) ? patched : patched.substring (0, 240);
-			GLib.warning ("cache-profile: %u bytes, head=[%s]", patched.length,
-				head.replace ("\n", "\\n"));
-			return patched;
+			return string.join ("\n", result.to_array ());
 		}
 
 		private Gum.ScriptBackend pick_backend (ScriptRuntime runtime) throws Error {
