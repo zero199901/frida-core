@@ -184,15 +184,14 @@ namespace Frida {
 			 * line, and a fragment is only code, not trailing text -- so the
 			 * prelude goes at the front of the first fragment.
 			 */
-			const string FRAGMENT_SEPARATOR = "␄";
 			if (!source.has_prefix (MARKER))
 				return prelude + source;
 
-			var marker = source.index_of ("\n" + FRAGMENT_SEPARATOR + "\n");
+			var marker = source.index_of ("\n␄\n");
 			if (marker < 0)
 				return prelude + source;
 
-			var cut = marker + FRAGMENT_SEPARATOR.length + 2;
+			var cut = marker + 3;
 			return source.substring (0, cut) + prelude + source.substring (cut);
 		}
 
