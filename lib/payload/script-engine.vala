@@ -14,6 +14,15 @@ namespace Frida {
 
 		private ScriptRuntime preferred_runtime = DEFAULT;
 
+		/*
+		 * Prepended to every script this engine creates. The agent sets it when
+		 * the host asked for a leaner runtime profile; today that means taking
+		 * the Java bridge away from native-only targets. It has to be per script
+		 * rather than a one-off bootstrap, because gumjs installs the Java global
+		 * into each script's context as it is created.
+		 */
+		public static string? source_prelude { get; set; default = null; }
+
 		private delegate void CompletionNotify ();
 
 		public ScriptEngine (ProcessInvader invader) {
@@ -90,6 +99,10 @@ namespace Frida {
 			string? name = options.name;
 			if (name == null)
 				name = "script%u".printf (script_id.handle);
+
+			var prelude = source_prelude;
+			if (prelude != null && source != null)
+				source = prelude + "\n" + source;
 
 			Gum.ScriptBackend backend = pick_backend (options.runtime);
 

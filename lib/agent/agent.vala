@@ -203,20 +203,16 @@ namespace Frida.Agent {
 				if (token == "java-bridge:off")
 					java_bridge_hidden = true;
 			}
+
+			hide_java_bridge ();
 		}
 
-		private static void hide_java_bridge (Gum.ScriptBackend backend) {
+		private static void hide_java_bridge () {
 			if (!java_bridge_hidden)
 				return;
 
-			try {
-				var script = backend.create_sync ("cache-runtime-profile",
-					"delete globalThis.Java; delete globalThis.java;");
-				script.load_sync ();
-				script.unload_sync ();
-			} catch (GLib.Error e) {
-				GLib.warning ("Unable to hide the Java bridge: %s", e.message);
-			}
+			ScriptEngine.source_prelude =
+				"delete globalThis.Java; delete globalThis.java;";
 		}
 
 		private static void apply_linker_notifier_offsets (string agent_parameters) {
@@ -791,7 +787,6 @@ namespace Frida.Agent {
 							throw new Error.NOT_SUPPORTED (
 								"QuickJS runtime not available due to build configuration");
 						}
-						hide_java_bridge (qjs_backend);
 					}
 					return qjs_backend;
 				case V8:
@@ -801,7 +796,6 @@ namespace Frida.Agent {
 							throw new Error.NOT_SUPPORTED (
 								"V8 runtime not available due to build configuration");
 						}
-						hide_java_bridge (v8_backend);
 					}
 					return v8_backend;
 			}
