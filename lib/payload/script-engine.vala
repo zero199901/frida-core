@@ -195,14 +195,14 @@ namespace Frida {
 
 			var size_re = new RegExp ("^[0-9]+ /");
 			string[] lines = source.split ("\n");
-			var out = new Gee.ArrayList<string> ();
+			var result = new Gee.ArrayList<string> ();
 			int i = 0;
 			while (i < lines.length) {
 				var is_fragment_header = (i > 0)
 					&& lines[i - 1] == FRAGMENT_SEPARATOR
 					&& size_re.match (lines[i]);
 				if (!is_fragment_header) {
-					out.add (lines[i]);
+					result.add (lines[i]);
 					i++;
 					continue;
 				}
@@ -210,27 +210,27 @@ namespace Frida {
 				var parts = lines[i].split (" ");
 				uint64 declared;
 				if (!uint64.try_parse (parts[0], out declared)) {
-					out.add (lines[i]);
+					result.add (lines[i]);
 					i++;
 					continue;
 				}
 
-				out.add ("%llu %s".printf (declared + prelude.length, parts[1]));
+				result.add ("%llu %s".printf (declared + prelude.length, parts[1]));
 				i++;
 
 				while (i < lines.length && lines[i] != FRAGMENT_SEPARATOR) {
-					out.add (lines[i]);
+					result.add (lines[i]);
 					i++;
 				}
 				if (i < lines.length) {
-					out.add (lines[i]);
+					result.add (lines[i]);
 					i++;
 					foreach (unowned string l in prelude_lines)
-						out.add (l);
+						result.add (l);
 				}
 			}
 
-			return string.join ("\n", out.to_array ());
+			return string.join ("\n", result.to_array ());
 		}
 
 		private Gum.ScriptBackend pick_backend (ScriptRuntime runtime) throws Error {
