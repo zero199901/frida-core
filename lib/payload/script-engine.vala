@@ -174,7 +174,7 @@ namespace Frida {
 		 * sources.
 		 */
 		private const string MARKER = "📦";
-		private const string FRAGMENT_SEPARATOR = "✄";
+		private const string FRAGMENT_SEPARATOR = "␄";
 
 		/*
 		 * A script package is MARKER + "\n" + fragments joined by
@@ -189,39 +189,48 @@ namespace Frida {
 			if (!source.has_prefix (MARKER))
 				return prelude + source;
 
-			var separator = "\n" + FRAGMENT_SEPARATOR + "\n";
-			string[] fragments = source.substring (MARKER.length).split (separator);
+			string[] prelude_lines = prelude.split ("\n");
+			if (prelude_lines[prelude_lines.length - 1].length == 0)
+				prelude_lines = prelude_lines[0 : prelude_lines.length - 1];
 
-			var builder = new StringBuilder (MARKER + "\n");
-			builder.append (fragments[0]);
-			for (int i = 1; i < fragments.length; i++) {
-				builder.append (separator);
-				builder.append (prepend_to_plain_fragment (prelude, fragments[i]));
+			var size_re = new RegExp ("^[0-9]+ /");
+			string[] lines = source.split ("\n");
+			var out = new Gee.ArrayList<string> ();
+			int i = 0;
+			while (i < lines.length) {
+				var is_fragment_header = (i > 0)
+					&& lines[i - 1] == FRAGMENT_SEPARATOR
+					&& size_re.match (lines[i]);
+				if (!is_fragment_header) {
+					out.add (lines[i]);
+					i++;
+					continue;
+				}
+
+				var parts = lines[i].split (" ");
+				uint64 declared;
+				if (!uint64.try_parse (parts[0], out declared)) {
+					out.add (lines[i]);
+					i++;
+					continue;
+				}
+
+				out.add ("%llu %s".printf (declared + prelude.length, parts[1]));
+				i++;
+
+				while (i < lines.length && lines[i] != FRAGMENT_SEPARATOR) {
+					out.add (lines[i]);
+					i++;
+				}
+				if (i < lines.length) {
+					out.add (lines[i]);
+					i++;
+					foreach (unowned string l in prelude_lines)
+						out.add (l);
+				}
 			}
 
-			return builder.str;
-		}
-
-		private static string prepend_to_plain_fragment (string prelude, string fragment) {
-			string[] lines = fragment.split ("\n");
-			if (lines.length < 2 || lines[1] != FRAGMENT_SEPARATOR)
-				return fragment;
-
-			string[] descriptor = lines[0].strip ().split (" ");
-			uint64 size;
-			if (descriptor.length < 2 || !uint64.try_parse (descriptor[0], out size))
-				return fragment;
-
-			var builder = new StringBuilder ();
-			builder.append ("%llu %s\n%s\n".printf (
-				size + prelude.length, descriptor[1], FRAGMENT_SEPARATOR));
-			builder.append (prelude);
-			for (int i = 2; i < lines.length; i++) {
-				builder.append ("\n");
-				builder.append (lines[i]);
-			}
-
-			return builder.str;
+			return string.join ("\n", out.to_array ());
 		}
 
 		private Gum.ScriptBackend pick_backend (ScriptRuntime runtime) throws Error {
