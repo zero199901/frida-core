@@ -100,16 +100,17 @@ namespace Frida {
 			if (name == null)
 				name = "script%u".printf (script_id.handle);
 
+			string? script_source = source;
 			var prelude = source_prelude;
-			if (prelude != null && source != null)
-				source = prelude + "\n" + source;
+			if (prelude != null && script_source != null)
+				script_source = prelude + "\n" + script_source;
 
 			Gum.ScriptBackend backend = pick_backend (options.runtime);
 
 			Gum.Script script;
 			try {
-				if (source != null)
-					script = yield backend.create (name, source, options.snapshot);
+				if (script_source != null)
+					script = yield backend.create (name, script_source, options.snapshot);
 				else
 					script = yield backend.create_from_bytes (bytes, options.snapshot);
 			} catch (Gum.Error e) {
