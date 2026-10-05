@@ -185,6 +185,15 @@ namespace Frida {
 		 * scripts -- are "<size> /path", "✄", code, and those get the prelude
 		 * with the size line grown to match.
 		 */
+		/* A fragment header looks like "1648 /frida/repl-1.js": digits, space, slash. */
+		private static bool is_module_size_line (string line) {
+			if (line.length < 4 || line[0] < '0' || line[0] > '9')
+				return false;
+
+			var space = line.index_of_char (' ');
+			return space > 0 && space + 1 < line.length && line[space + 1] == '/';
+		}
+
 		private static string insert_source_prelude (string prelude, string source) {
 			if (!source.has_prefix (MARKER))
 				return prelude + source;
@@ -193,14 +202,13 @@ namespace Frida {
 			if (prelude_lines[prelude_lines.length - 1].length == 0)
 				prelude_lines = prelude_lines[0 : prelude_lines.length - 1];
 
-			var size_re = new RegExp ("^[0-9]+ /");
 			string[] lines = source.split ("\n");
 			var result = new Gee.ArrayList<string> ();
 			int i = 0;
 			while (i < lines.length) {
 				var is_fragment_header = (i > 0)
 					&& lines[i - 1] == FRAGMENT_SEPARATOR
-					&& size_re.match (lines[i]);
+					&& is_module_size_line (lines[i]);
 				if (!is_fragment_header) {
 					result.add (lines[i]);
 					i++;
