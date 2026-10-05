@@ -267,7 +267,7 @@ namespace Frida {
 		private static string? read_process_name (uint pid) {
 			string contents;
 			try {
-				FileUtils.get_contents ("/proc/%d/cmdline".printf ((long) pid), out contents);
+				FileUtils.get_contents ("/proc/%u/cmdline".printf (pid), out contents);
 			} catch (FileError e) {
 				return null;
 			}
