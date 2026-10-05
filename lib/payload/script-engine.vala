@@ -206,7 +206,7 @@ namespace Frida {
 			var builder = new StringBuilder ();
 			for (int i = 0; i <= header_end; i++) {
 				builder.append (i == 1
-					? "%u %s".printf (first_module_size + prelude.length, descriptor[1])
+					? "%llu %s".printf (first_module_size + prelude.length, descriptor[1])
 					: lines[i]);
 				builder.append_c ('\n');
 			}
