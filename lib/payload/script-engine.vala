@@ -185,7 +185,7 @@ namespace Frida {
 			 * prelude goes at the front of the first fragment.
 			 */
 			const string FRAGMENT_SEPARATOR = "␄";
-			if (!source.has_prefix ("\U0001F4E6"))
+			if (!source.has_prefix (MARKER))
 				return prelude + source;
 
 			var marker = source.index_of ("\n" + FRAGMENT_SEPARATOR + "\n");
