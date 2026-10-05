@@ -174,7 +174,7 @@ namespace Frida {
 		 * sources.
 		 */
 		private static string insert_source_prelude (string prelude, string source) {
-			if (!source.has_prefix ("\u{1F4E6}"))
+			if (!source.has_prefix ("📦"))
 				return prelude + source;
 
 			/*
