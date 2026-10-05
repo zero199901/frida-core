@@ -173,51 +173,27 @@ namespace Frida {
 		 * prelude goes after the header block, and only at the top for ordinary
 		 * sources.
 		 */
+		private const string MARKER = "📦";
+
 		private static string insert_source_prelude (string prelude, string source) {
-			if (!source.has_prefix ("📦"))
-				return prelude + source;
-
 			/*
-			 * A package is a marker line, then one "<size> /path" line per module,
-			 * then a blank line, then the module bodies back to back. Anything
-			 * appended after that is not code, so the prelude has to become part
-			 * of the first module -- and its size line has to grow with it.
+			 * A script package is: the U+1F4E6 marker, a bundle header of
+			 * "<size> /path" lines, a "✄" separator, then the fragments joined
+			 * by the same separator. The marker and header have to stay at the
+			 * very top -- anything before them is a parse error on the marker
+			 * line, and a fragment is only code, not trailing text -- so the
+			 * prelude goes at the front of the first fragment.
 			 */
-			string[] lines = source.split ("\n");
-
-			var header_end = -1;
-			for (int i = 1; i < lines.length; i++) {
-				if (lines[i].length == 0) {
-					header_end = i;
-					break;
-				}
-			}
-			if (header_end < 0)
+			const string FRAGMENT_SEPARATOR = "␄";
+			if (!source.has_prefix ("\U0001F4E6"))
 				return prelude + source;
 
-			string[] descriptor = lines[1].strip ().split (" ");
-			if (descriptor.length < 2)
+			var marker = source.index_of ("\n" + FRAGMENT_SEPARATOR + "\n");
+			if (marker < 0)
 				return prelude + source;
 
-			uint64 first_module_size;
-			if (!uint64.try_parse (descriptor[0], out first_module_size))
-				return prelude + source;
-
-			var builder = new StringBuilder ();
-			for (int i = 0; i <= header_end; i++) {
-				builder.append (i == 1
-					? "%llu %s".printf (first_module_size + prelude.length, descriptor[1])
-					: lines[i]);
-				builder.append_c ('\n');
-			}
-
-			builder.append (prelude);
-			for (int i = header_end + 1; i < lines.length; i++) {
-				builder.append_c ('\n');
-				builder.append (lines[i]);
-			}
-
-			return builder.str;
+			var cut = marker + FRAGMENT_SEPARATOR.length + 2;
+			return source.substring (0, cut) + prelude + source.substring (cut);
 		}
 
 		private Gum.ScriptBackend pick_backend (ScriptRuntime runtime) throws Error {
