@@ -102,8 +102,17 @@ namespace Frida {
 
 			string? script_source = source;
 			var prelude = source_prelude;
-			if (prelude != null && script_source != null)
-				script_source = prelude + "\n" + script_source;
+			if (prelude != null && script_source != null) {
+				script_source = prelude + script_source;
+
+				// Temporary: the runtime rejected the assembled script with a
+				// parse error on the line after the prelude, and guessing what
+				// sits at the boundary is slower than looking.
+				var head = (script_source.length < 48)
+					? script_source : script_source.substring (0, 48);
+				GLib.warning ("cache-profile: assembled %u bytes, head=[%s]",
+					script_source.length, head.replace ("\n", "\\n"));
+			}
 
 			Gum.ScriptBackend backend = pick_backend (options.runtime);
 
