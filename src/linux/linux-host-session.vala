@@ -274,7 +274,7 @@ namespace Frida {
 			opts.select_pid (pid);
 			opts.scope = MINIMAL;
 			var processes = yield process_enumerator.enumerate_processes (opts);
-			return (processes.length != 0) ? processes[0].identifier : null;
+			return (processes.length != 0) ? processes[0].name : null;
 		}
 
 		public override async HostApplicationInfo[] enumerate_applications (HashTable<string, Variant> options,
