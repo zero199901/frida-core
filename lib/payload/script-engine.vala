@@ -174,21 +174,47 @@ namespace Frida {
 		 * sources.
 		 */
 		private static string insert_source_prelude (string prelude, string source) {
-			if (!source.has_prefix ("📦"))
+			if (!source.has_prefix ("\u{1F4E6}"))
+				return prelude + source;
+
+			/*
+			 * A package is a marker line, then one "<size> /path" line per module,
+			 * then a blank line, then the module bodies back to back. Anything
+			 * appended after that is not code, so the prelude has to become part
+			 * of the first module -- and its size line has to grow with it.
+			 */
+			string[] lines = source.split ("\n");
+
+			var header_end = -1;
+			for (int i = 1; i < lines.length; i++) {
+				if (lines[i].length == 0) {
+					header_end = i;
+					break;
+				}
+			}
+			if (header_end < 0)
+				return prelude + source;
+
+			string[] descriptor = lines[1].strip ().split (" ");
+			if (descriptor.length < 2)
+				return prelude + source;
+
+			uint64 first_module_size;
+			if (!uint64.try_parse (descriptor[0], out first_module_size))
 				return prelude + source;
 
 			var builder = new StringBuilder ();
-			string[] lines = source.split ("\n");
-			for (int i = 0; i < lines.length; i++) {
-				if (i > 0)
-					builder.append_c ('\n');
-				builder.append (lines[i]);
+			for (int i = 0; i <= header_end; i++) {
+				builder.append (i == 1
+					? "%u %s".printf (first_module_size + prelude.length, descriptor[1])
+					: lines[i]);
+				builder.append_c ('\n');
+			}
 
-				// The header ends at the first blank line.
-				if (i > 0 && lines[i].length == 0) {
-					builder.append_c ('\n');
-					builder.append (prelude);
-				}
+			builder.append (prelude);
+			for (int i = header_end + 1; i < lines.length; i++) {
+				builder.append_c ('\n');
+				builder.append (lines[i]);
 			}
 
 			return builder.str;
