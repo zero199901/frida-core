@@ -230,8 +230,11 @@ namespace Frida.Agent {
 			if (!java_bridge_hidden)
 				return;
 
+			// The trailing comment matters: with a bare statement the host sent
+			// back a script that failed to parse on the line after the prelude,
+			// so something lands between the two and // swallows it.
 			ScriptEngine.source_prelude =
-				"delete globalThis.Java; delete globalThis.java;";
+				"delete globalThis.Java; delete globalThis.java;//";
 		}
 
 		private static void apply_linker_notifier_offsets (string agent_parameters) {
