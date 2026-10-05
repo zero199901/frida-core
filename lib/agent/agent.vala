@@ -234,7 +234,7 @@ namespace Frida.Agent {
 			// back a script that failed to parse on the line after the prelude,
 			// so something lands between the two and // swallows it.
 			ScriptEngine.source_prelude =
-				"delete globalThis.Java; delete globalThis.java;//";
+				"delete globalThis.Java;\ndelete globalThis.java;\n";
 		}
 
 		private static void apply_linker_notifier_offsets (string agent_parameters) {
