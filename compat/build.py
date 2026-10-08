@@ -238,14 +238,14 @@ def setup(role: Role,
                 if "helper" in components:
                     outputs[group] += [
                         Output(identifier=f"helper_{kind}",
-                               name=f"frida-helper-{other_arch}",
+                               name=f"cache-helper-{other_arch}",
                                file=HELPER_FILE_UNIX,
                                target=HELPER_TARGET),
                     ]
                 if "agent" in components:
                     outputs[group] += [
                         Output(identifier=f"agent_{kind}",
-                               name=f"frida-agent-{other_arch}.dylib",
+                               name=f"cache-agent-{other_arch}.dylib",
                                file=AGENT_FILE_DARWIN,
                                target=AGENT_TARGET),
                     ]
@@ -346,14 +346,14 @@ def setup(role: Role,
             if host_os == "android" and host_arch in {"x86_64", "x86"} and "agent" in components:
                 outputs[OutputGroup("arm")] = [
                     Output(identifier="agent_emulated_legacy",
-                           name="frida-agent-arm.so",
+                           name="cache-agent-arm.so",
                            file=AGENT_FILE_ELF,
                            target=AGENT_TARGET),
                 ]
                 if host_arch == "x86_64":
                     outputs[OutputGroup("arm64")] = [
                         Output(identifier="agent_emulated_modern",
-                               name="frida-agent-arm64.so",
+                               name="cache-agent-arm64.so",
                                file=AGENT_FILE_ELF,
                                target=AGENT_TARGET),
                     ]
