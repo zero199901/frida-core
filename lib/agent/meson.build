@@ -68,7 +68,7 @@ if build_agent
     c_args: frida_component_cflags,
     vala_header: 'frida-agent.h',
     vala_args: [base_vala_args, payload_vala_args, extra_vala_args],
-    link_args: extra_link_args,
+    link_args: extra_link_args + ['-Wl,-soname,' + agent_name],
     link_depends: extra_link_depends,
     vs_module_defs: 'frida-agent.def',
     override_options: ['b_asneeded=true'],
