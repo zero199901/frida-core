@@ -241,6 +241,18 @@ namespace Frida {
 			if (process_name == null)
 				return false;
 
+			/*
+			 * A spawn can land in a subprocess of the package (the launcher
+			 * script goes through monkey, and isolated/service processes carry
+			 * names like com.example:remote). The control files are per
+			 * package, so match the exact process name and its package prefix
+			 * with any ":suffix" stripped.
+			 */
+			string[] names = { process_name };
+			var colon = process_name.index_of (":");
+			if (colon != -1)
+				names += process_name[0:colon];
+
 			string[] on_dirs = {
 				"/data/local/tmp/.java-bridge-force.d",
 				"/data/local/tmp/java-bridge-force.d",
@@ -248,8 +260,10 @@ namespace Frida {
 				"/data/local/tmp/java-bridge-allow.d",
 			};
 			foreach (unowned string dir in on_dirs) {
-				if (FileUtils.test ("%s/%s".printf (dir, process_name), FileTest.EXISTS))
-					return false;
+				foreach (unowned string name in names) {
+					if (FileUtils.test ("%s/%s".printf (dir, name), FileTest.EXISTS))
+						return false;
+				}
 			}
 
 			string[] off_dirs = {
@@ -257,8 +271,10 @@ namespace Frida {
 				"/data/local/tmp/java-bridge-deny.d",
 			};
 			foreach (unowned string dir in off_dirs) {
-				if (FileUtils.test ("%s/%s".printf (dir, process_name), FileTest.EXISTS))
-					return true;
+				foreach (unowned string name in names) {
+					if (FileUtils.test ("%s/%s".printf (dir, name), FileTest.EXISTS))
+						return true;
+				}
 			}
 
 			return false;

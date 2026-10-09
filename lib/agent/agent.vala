@@ -876,7 +876,8 @@ namespace Frida.Agent {
 
 			MainContext dbus_context = yield get_dbus_context ();
 
-			var session = new LiveAgentSession (this, id, opts.persist_timeout, sink, dbus_context);
+			var session = new LiveAgentSession (this, id, opts.persist_timeout, sink, dbus_context,
+				java_bridge_hidden);
 			sessions[id] = session;
 			session.closed.connect (on_session_closed);
 			session.script_eternalized.connect (on_script_eternalized);
@@ -1678,14 +1679,15 @@ namespace Frida.Agent {
 		}
 
 		public LiveAgentSession (ProcessInvader invader, AgentSessionId id, uint persist_timeout, AgentMessageSink sink,
-				MainContext dbus_context) {
+				MainContext dbus_context, bool java_bridge_denied = false) {
 			Object (
 				invader: invader,
 				id: id,
 				persist_timeout: persist_timeout,
 				message_sink: sink,
 				frida_context: MainContext.ref_thread_default (),
-				dbus_context: dbus_context
+				dbus_context: dbus_context,
+				java_bridge_denied: java_bridge_denied
 			);
 		}
 	}

@@ -33,6 +33,17 @@ namespace Frida {
 			construct;
 		}
 
+		/*
+		 * Set when the host resolved a java-bridge deny entry for this process
+		 * (LinuxHostSession.java_bridge_disabled_for). The target must not get
+		 * a Java bridge, including the one frida-tools' REPL pushes in over the
+		 * frida:load-bridge message protocol.
+		 */
+		public bool java_bridge_denied {
+			get;
+			construct;
+		}
+
 		private Promise<bool>? close_request;
 		private Promise<bool> flush_complete = new Promise<bool> ();
 
@@ -264,7 +275,91 @@ namespace Frida {
 		}
 
 		private void on_message_from_script (AgentScriptId script_id, string json, Bytes? data) {
+			if (java_bridge_denied && handle_bridge_request (script_id, json))
+				return;
+
 			transmitter.post_message_from_script (script_id, json, data);
+		}
+
+		/*
+		 * frida-tools' REPL installs lazy ObjC/Swift/Java globals whose getters
+		 * ask the host for bridge source over the frida:load-bridge protocol.
+		 * For a denied process we answer with a stub that reports
+		 * available == false, so clients probing Java.available see an honest
+		 * "no" instead of a VM attach, and swallow the request so no bridge
+		 * source ever reaches the target. Returning true means handled.
+		 */
+		private bool handle_bridge_request (AgentScriptId script_id, string json) {
+			Json.Node? root;
+			try {
+				root = Json.from_string (json);
+			} catch (GLib.Error e) {
+				return false;
+			}
+			if (root == null || root.get_node_type () != Json.NodeType.OBJECT)
+				return false;
+
+			var envelope = root.get_object ();
+			Json.Object request;
+			/*
+			 * Clients raise the request with send({type: "frida:load-bridge",
+			 * name: ...}), which arrives wrapped in the usual send envelope.
+			 * The frida-tools host unwraps it the same way.
+			 */
+			if (envelope.get_string_member_with_default ("type", "") == "send") {
+				var inner = envelope.get_member ("payload");
+				if (inner == null || inner.get_node_type () != Json.NodeType.OBJECT)
+					return false;
+				request = inner.get_object ();
+			} else {
+				request = envelope;
+			}
+
+			if (request.get_string_member_with_default ("type", "") != "frida:load-bridge")
+				return false;
+
+			unowned string name = request.get_string_member_with_default ("name", "bridge");
+			var stub = new Json.Object ();
+			stub.set_string_member ("type", "frida:bridge-loaded");
+			stub.set_string_member ("filename", "denied.js");
+			stub.set_string_member ("source", render_denied_bridge_stub (name));
+
+			try {
+				script_engine.post_to_script (script_id, Json.to_string (new Json.Node.alloc ().init_object (stub), false));
+			} catch (Error e) {
+				GLib.debug ("Unable to answer denied bridge request: %s", e.message);
+			}
+			return true;
+		}
+
+		private static string render_denied_bridge_stub (string name) {
+			var code = new StringBuilder ();
+			code.append ("const bridge = {");
+			code.append ("get available() { return false; }, ");
+			code.append_printf (
+				"get androidVersion() { throw new Error('%s bridge is denied for this process by policy'); }, ", name);
+			code.append_printf (
+				"perform() { throw new Error('%s bridge is denied for this process by policy'); }, ", name);
+			code.append_printf (
+				"performNow() { throw new Error('%s bridge is denied for this process by policy'); }, ", name);
+			code.append_printf (
+				"use() { throw new Error('%s bridge is denied for this process by policy'); }, ", name);
+			code.append_printf (
+				"synchronized() { throw new Error('%s bridge is denied for this process by policy'); }, ", name);
+			code.append_printf (
+				"enumerateLoadedClasses() { throw new Error('%s bridge is denied for this process by policy'); }, ", name);
+			code.append_printf (
+				"enumerateLoadedClassesSync() { throw new Error('%s bridge is denied for this process by policy'); }, ", name);
+			code.append_printf (
+				"enumerateMethods() { throw new Error('%s bridge is denied for this process by policy'); }, ", name);
+			code.append_printf (
+				"enumerateMethodsSync() { throw new Error('%s bridge is denied for this process by policy'); }, ", name);
+			code.append ("scheduleOnMainThread() {}, ");
+			code.append ("_dispose() {}");
+			code.append ("};\n");
+			code.append_printf ("Object.defineProperty(globalThis, '%s', { value: bridge });\n", name);
+			code.append ("return bridge;");
+			return code.str;
 		}
 
 		private void on_message_from_debugger (AgentScriptId script_id, string message) {
