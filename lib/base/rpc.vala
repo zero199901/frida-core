@@ -1,4 +1,20 @@
 namespace Frida {
+	namespace Obfuscate {
+		private const uint8 XOR_KEY = 0x55;
+
+		public static string decode_hex_xor (string hex) {
+			var len = hex.length / 2;
+			var sb = new StringBuilder.sized (len);
+			for (var i = 0; i != len; i++) {
+				int64 val;
+				int64.try_parse (hex.substring (i * 2, 2), out val, null, 16);
+				var b = (uint8) val;
+				sb.append_c ((char) (b ^ XOR_KEY));
+			}
+			return sb.str;
+		}
+	}
+
 	/**
 	 * Issues RPC calls over a {@link RpcPeer}, matching responses to requests.
 	 */
@@ -36,7 +52,7 @@ namespace Frida {
 			var request = new Json.Builder ();
 			request
 				.begin_array ()
-				.add_string_value ("frida:rpc")
+				.add_string_value (Obfuscate.decode_hex_xor ("33273c31346f272536"))
 				.add_string_value (request_id)
 				.add_string_value ("call")
 				.add_string_value (method)
@@ -96,7 +112,7 @@ namespace Frida {
 		 * @return true if the message was an RPC message and was handled
 		 */
 		public bool try_handle_message (string json) {
-			if (json.index_of ("\"frida:rpc\"") == -1)
+			if (json.index_of ("\"" + Obfuscate.decode_hex_xor ("33273c31346f272536") + "\"") == -1)
 				return false;
 
 			var parser = new Json.Parser ();
@@ -125,7 +141,7 @@ namespace Frida {
 				return false;
 
 			string? type = rpc_message.get_element (0).get_string ();
-			if (type == null || type != "frida:rpc")
+			if (type == null || type != Obfuscate.decode_hex_xor ("33273c31346f272536"))
 				return false;
 
 			var request_id_value = rpc_message.get_element (1);

@@ -13,7 +13,7 @@ namespace Frida {
 
 		public static async AndroidHelperClient open (string serial, Cancellable? cancellable) throws Error, IOError {
 			string instance_id = Uuid.string_random ().replace ("-", "");
-			string helper_path = "/data/local/tmp/frida-helper-" + instance_id + ".dex";
+			string helper_path = "/data/local/tmp/cache-helper-" + instance_id + ".dex";
 
 			var helper_dex = new MemoryInputStream.from_bytes (
 				new Bytes.static (Frida.Data.Android.get_helper_dex_blob ().data));
@@ -55,7 +55,7 @@ namespace Frida {
 				var client = yield AdbClient.open (cancellable);
 				try {
 					yield client.request ("host:transport:" + serial, cancellable);
-					yield client.request_protocol_change ("localabstract:/frida-helper-" + instance_id,
+					yield client.request_protocol_change ("localabstract:/cache-helper-" + instance_id,
 						cancellable);
 				} catch (GLib.Error e) {
 					client.close.begin ();
